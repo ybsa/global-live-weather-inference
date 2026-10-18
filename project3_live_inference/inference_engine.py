@@ -1,5 +1,5 @@
 """Universal Live Inference Engine for Project 3.
-Bridges Project 1 (live data collector) and Project 2 (TimesFM forecasting model)
+Bridges Project 1 (data_agent) and Project 2 (TimesFM forecasting model)
 to forecast future trajectories and evaluate 'Chance of Weather Change' globally.
 """
 from __future__ import annotations
@@ -8,11 +8,9 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from data_agent import resolve_location, get_hourly_forecast
 from project2_timesfm_model.timesfm_pipeline import TimesFMPipeline
 from project3_live_inference.change_detector import WeatherChangeDetector
-from weather_agent.geocoding import resolve_location
-from weather_agent.service import get_forecast
-from weather_agent.storage import connect
 
 
 class LiveInferenceEngine:
@@ -28,42 +26,44 @@ class LiveInferenceEngine:
 
     def analyze_location(self, location_query: str) -> dict[str, Any]:
         """Fetch recent context, run TimesFM inference, and compute chance of weather change."""
-        con = connect(self.db_path)
-        loc = resolve_location(con, location_query)
+        loc = resolve_location(location_query)
         if not loc:
             return {"error": f"Location '{location_query}' could not be resolved."}
 
-        # 1. Retrieve recent context values from SQLite
-        rows = con.execute(
-            """SELECT valid_at, temperature_c, humidity_pct, precipitation_mm, wind_speed_kmh
-               FROM weather_records
-               WHERE location_id = ?
-               ORDER BY valid_at ASC
-               LIMIT 168""",
-            (loc.location_id,),
-        ).fetchall()
+        # 1. Retrieve recent context values from SQLite if DB exists
+        temps: list[float] = []
+        if self.db_path and Path(self.db_path).exists():
+            try:
+                con = sqlite3.connect(self.db_path)
+                con.row_factory = sqlite3.Row
+                rows = con.execute(
+                    """SELECT valid_at, temperature_c, humidity_pct, precipitation_mm, wind_speed_kmh
+                       FROM weather_records
+                       WHERE location_id = ?
+                       ORDER BY valid_at ASC
+                       LIMIT 168""",
+                    (loc.location_id,),
+                ).fetchall()
+                temps = [r["temperature_c"] for r in rows if r["temperature_c"] is not None]
+                con.close()
+            except Exception:
+                temps = []
 
-        temps = [r["temperature_c"] for r in rows if r["temperature_c"] is not None]
-        rains = [r["precipitation_mm"] or 0.0 for r in rows]
-        winds = [r["wind_speed_kmh"] or 0.0 for r in rows]
+        # 2. Fetch live forecast series via Project 1 Universal Data Agent
+        fc = get_hourly_forecast(loc, forecast_days=3)
+        forecast_temps = fc.temperatures
+        forecast_rains = fc.precipitations
+        forecast_winds = fc.wind_speeds
 
-        # If sparse history in DB, fetch live forecast baseline from Project 1 service
-        forecast_service_data = get_forecast(con, loc.location_id, days=1)
-        hourly_preview = forecast_service_data.get("hourly_preview", [])
-        
-        forecast_temps = [h["temp_c"] for h in hourly_preview if h.get("temp_c") is not None]
-        forecast_rains = [h["rain_mm"] for h in hourly_preview if h.get("rain_mm") is not None]
-        forecast_winds = [h["wind_kmh"] for h in hourly_preview if h.get("wind_kmh") is not None]
-
-        # Run TimesFM inference if context exists
+        # 3. Run TimesFM inference if historical context exists, otherwise project from forecast
         if len(temps) >= 12:
             tfm_predicted_temps = self.model.forecast(temps, horizon_len=self.horizon_len)
         else:
-            tfm_predicted_temps = forecast_temps
+            tfm_predicted_temps = forecast_temps[:self.horizon_len] if forecast_temps else [20.0] * self.horizon_len
 
-        # 2. Detect abrupt shifts & anomalies
+        # 4. Detect abrupt shifts & anomalies
         alerts = []
-        
+
         # Cold plunge
         temp_alert = self.detector.detect_temperature_shock(temps if temps else [20.0], tfm_predicted_temps)
         if temp_alert:
@@ -86,10 +86,13 @@ class LiveInferenceEngine:
 
         chance_of_change = self.detector.calculate_overall_chance_of_change(alerts)
 
+        admin1 = getattr(loc, "admin1", "") or getattr(loc, "province", "")
+        admin2 = getattr(loc, "admin2", "") or getattr(loc, "district", "")
+
         return {
             "location": loc.name,
-            "district": loc.district,
-            "province": loc.province,
+            "district": admin2,
+            "province": admin1,
             "country_code": getattr(loc, "country_code", ""),
             "elevation_m": loc.elevation_m,
             "forecast_horizon_hours": self.horizon_len,
