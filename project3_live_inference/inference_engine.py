@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from project2_timesfm_model.timesfm_pipeline import NepalTimesFMPipeline
+from project2_timesfm_model.timesfm_pipeline import TimesFMPipeline
 from project3_live_inference.change_detector import WeatherChangeDetector
 from weather_agent.geocoding import resolve_location
 from weather_agent.service import get_forecast
@@ -24,7 +24,7 @@ class LiveInferenceEngine:
         self.db_path = db_path
         self.horizon_len = horizon_len
         self.detector = WeatherChangeDetector()
-        self.model = NepalTimesFMPipeline(horizon_len=horizon_len)
+        self.model = TimesFMPipeline(horizon_len=horizon_len)
 
     def analyze_location(self, location_query: str) -> dict[str, Any]:
         """Fetch recent context, run TimesFM inference, and compute chance of weather change."""
@@ -109,7 +109,3 @@ class LiveInferenceEngine:
             "projected_temperature_next_24h": tfm_predicted_temps[:24],
             "disclaimer": "Experimental AI inference. For official life-safety warnings, refer to your national meteorological agency (e.g. DHM, NOAA, Met Office, JMA).",
         }
-
-
-# Backward compatibility alias
-NepalLiveInferenceEngine = LiveInferenceEngine

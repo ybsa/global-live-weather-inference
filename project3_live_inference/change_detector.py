@@ -117,7 +117,3 @@ class WeatherChangeDetector:
             return 15  # Baseline normal weather variance
         max_prob = max(a.probability_pct for a in alerts)
         return min(98, max_prob + (len(alerts) - 1) * 5)
-
-
-# Backward compatibility alias
-NepalChangeDetector = WeatherChangeDetector
