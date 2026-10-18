@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nepal-live-weather-inference"
+version = "0.1.0"
+description = "Live Nepal weather inference and abrupt-change detection."
+requires-python = ">=3.11"
+dependencies = ["global-weather-data-agent", "nepal-timesfm-model"]
+
+[project.scripts]
+nepal-live-inference = "project3_live_inference.cli:main"
+
+[tool.setuptools]
+packages = ["project3_live_inference"]
+
