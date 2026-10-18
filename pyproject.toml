@@ -3,14 +3,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nepal-live-weather-inference"
+name = "global-live-weather-inference"
 version = "0.1.0"
-description = "Live Nepal weather inference and abrupt-change detection."
+description = "Universal live weather inference, Google TimesFM multi-hour forecasting, severe anomaly alerts, and Streamlit dashboard."
 requires-python = ">=3.11"
-dependencies = ["global-weather-data-agent", "nepal-timesfm-model"]
+dependencies = ["global-weather-data-agent"]
+
+[project.optional-dependencies]
+nepal-model = ["nepal-timesfm-model"]
+dashboard = ["streamlit", "plotly"]
 
 [project.scripts]
-nepal-live-inference = "project3_live_inference.cli:main"
+weather-inference = "project3_live_inference.cli:main"
 
 [tool.setuptools]
 packages = ["project3_live_inference"]

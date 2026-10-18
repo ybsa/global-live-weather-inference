@@ -5,4 +5,7 @@ data/*.sqlite3
 logs/
 outputs/
 .env
+*.egg-info/
+dist/
+build/
 

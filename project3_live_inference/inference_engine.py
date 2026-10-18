@@ -1,6 +1,6 @@
-"""Live Inference Engine for Project 3.
-Bridges Project 1 (live data collector) and Project 2 (TimesFM model)
-to forecast future trajectories and evaluate 'Chance of Weather Change' across Nepal.
+"""Universal Live Inference Engine for Project 3.
+Bridges Project 1 (live data collector) and Project 2 (TimesFM forecasting model)
+to forecast future trajectories and evaluate 'Chance of Weather Change' globally.
 """
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from project2_timesfm_model.timesfm_pipeline import NepalTimesFMPipeline
-from project3_live_inference.change_detector import NepalChangeDetector
+from project3_live_inference.change_detector import WeatherChangeDetector
 from weather_agent.geocoding import resolve_location
 from weather_agent.service import get_forecast
 from weather_agent.storage import connect
 
 
-class NepalLiveInferenceEngine:
+class LiveInferenceEngine:
     def __init__(
         self,
         db_path: str = "data/weather.sqlite3",
@@ -23,7 +23,7 @@ class NepalLiveInferenceEngine:
     ):
         self.db_path = db_path
         self.horizon_len = horizon_len
-        self.detector = NepalChangeDetector()
+        self.detector = WeatherChangeDetector()
         self.model = NepalTimesFMPipeline(horizon_len=horizon_len)
 
     def analyze_location(self, location_query: str) -> dict[str, Any]:
@@ -31,7 +31,7 @@ class NepalLiveInferenceEngine:
         con = connect(self.db_path)
         loc = resolve_location(con, location_query)
         if not loc:
-            return {"error": f"Location '{location_query}' could not be resolved in Nepal."}
+            return {"error": f"Location '{location_query}' could not be resolved."}
 
         # 1. Retrieve recent context values from SQLite
         rows = con.execute(
@@ -64,14 +64,22 @@ class NepalLiveInferenceEngine:
         # 2. Detect abrupt shifts & anomalies
         alerts = []
         
+        # Cold plunge
         temp_alert = self.detector.detect_temperature_shock(temps if temps else [20.0], tfm_predicted_temps)
         if temp_alert:
             alerts.append(temp_alert)
 
+        # Extreme heat surge
+        heat_alert = self.detector.detect_heatwave(temps if temps else [20.0], tfm_predicted_temps)
+        if heat_alert:
+            alerts.append(heat_alert)
+
+        # Rain / flood burst
         rain_alert = self.detector.detect_precipitation_burst(forecast_rains)
         if rain_alert:
             alerts.append(rain_alert)
 
+        # Wind surge
         wind_alert = self.detector.detect_wind_surge(forecast_winds)
         if wind_alert:
             alerts.append(wind_alert)
@@ -82,6 +90,7 @@ class NepalLiveInferenceEngine:
             "location": loc.name,
             "district": loc.district,
             "province": loc.province,
+            "country_code": getattr(loc, "country_code", ""),
             "elevation_m": loc.elevation_m,
             "forecast_horizon_hours": self.horizon_len,
             "chance_of_weather_change_pct": chance_of_change,
@@ -98,5 +107,9 @@ class NepalLiveInferenceEngine:
                 for a in alerts
             ],
             "projected_temperature_next_24h": tfm_predicted_temps[:24],
-            "disclaimer": "Experimental inference. For official life-safety warnings, refer to Nepal DHM (hydrology.gov.np).",
+            "disclaimer": "Experimental AI inference. For official life-safety warnings, refer to your national meteorological agency (e.g. DHM, NOAA, Met Office, JMA).",
         }
+
+
+# Backward compatibility alias
+NepalLiveInferenceEngine = LiveInferenceEngine
