@@ -15,3 +15,7 @@ nepal-live-inference "Namche Bazaar" --database ..\global-weather-data-agent\dat
 
 For GitHub use, replace the two local installs with tagged package releases from Projects 1 and 2. The database is runtime state and must never be committed.
 
+## License
+
+MIT. See [LICENSE](LICENSE).
+
